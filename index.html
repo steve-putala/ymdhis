@@ -1,0 +1,655 @@
+<html>
+    <head>
+        <style type="text/css">
+            form {
+                margin: 0;
+                display: inline-block;
+            }
+            table {
+                border-collapse: collapse;
+            }
+            table td, table th {
+                border: 1px solid #ddd;
+                padding: 8px;
+            }
+            table tr:nth-child(even){
+                background-color: #f2f2f2;
+            }
+            table tr:hover {
+                background-color: #ddd;
+            }
+            table th{
+                padding-top: .3em;
+                padding-bottom: .3em;
+                background-color: #045faa;
+                color: white;
+            }
+            table tr td {
+                text-align: right;
+            }
+            table tr td:first-child, /* label */
+            table tr td:last-child { /* notes */
+                text-align: left;
+            }
+            table tr td:nth-child(5) { /* work checkbox */
+                text-align: center;
+            }
+
+            table tbody#total tr {
+                background-color: inherit !important;
+            }
+            table tbody#total tr td {
+                border-width: 0;
+            }
+            table tbody#total tr td:first-child {
+                text-align: right;
+            }
+            table tbody#total tr td:nth-child(2) {
+                border-width: 1px;
+            }
+            .continueIcon {
+                margin: auto .5em;
+                /*display: inline-block;
+                text-decoration: none;
+                cursor: pointer;
+                padding: 0 .2em;
+                color: #000000;
+                background: #efefef;
+                border: 1px solid #767676
+                border-radius: .2em;*/
+            }
+        </style>
+
+    </head>
+    <body>
+        <form action="">
+            <input name="label">
+            <button type="submit">&#x23f5;</button>
+        </form>
+        <!--<button type="button" id="buttonPause">&#x23f8;</button>-->
+        <button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>
+        <table contenteditable="true">
+            <thead>
+                <tr>
+                    <th>label</th>
+                    <th>time</th>
+                    <th>start</th>
+                    <th>end</th>
+                    <th>work</th>
+                    <th>notes</th>
+                </tr>
+            </thead>
+            <tbody id="entries">
+                <tr id="placeholder"><td colspan="6">Enter an activity above</td></tr>
+            </tbody>
+            <tbody id="total">
+                <tr>
+                    <td>work:</td>
+                    <td>00:00:00</td>
+                    <td colspan="4"></td>
+                </tr>
+                <tr>
+                    <td>waste:</td>
+                    <td>00:00:00</td>
+                    <td colspan="4"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <template id="row">
+            <tr>
+                <td class="continue"></td>
+                <td></td>
+                <td></td>
+                <td></td>
+                <td>
+                    <input type="checkbox" checked="checked">
+                </td>
+                <td></td>
+            </tr>
+        </template>
+
+        <script>
+            /*
+            let work = 0;
+            document.querySelectorAll('tbody tr').forEach(
+            function (tr) {
+            if (null === tr.querySelector('input:checked')) { return; }
+            let td = tr.querySelectorAll('td');
+            let matches = td[1].textContent.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+            if (!matches) { return; }
+            let seconds = parseInt(matches[3]) + ( parseInt(matches[2]) * 60 ) + ( parseInt(matches[1]) * 60 * 60 );
+            work += seconds;
+            }
+            );
+            console.log(''+Math.floor(work/60/60)+':'+Math.floor((work/60))%60+':'+Math.floor(work%60));
+            */
+            // @TODO: save to local storage
+            // @TODO: catch event for radio button or time change to trigger total update
+
+            time = {
+                input : document.querySelector('input[name="label"]'),
+                form : document.querySelector('form'),
+                template : document.getElementById('row'),
+                totalTemplate : document.getElementById('totals'),
+                tbody : document.getElementById('entries'),
+                continueIcon : function () {
+                    let button = document.createElement('button');
+                    button.className = 'continueIcon';
+                    button.textContent = "\u27f3";
+                    return button;
+                },
+                start : null,
+                previous : null,
+                timeout : null,
+
+                counter : function () {
+                    if (!time.timeout || !time.previous) {
+                        return;
+                    }
+
+                    time.previous[1].textContent = time.millisecondToTime(new Date() - time.start);
+
+                    time.updateTotal();
+
+                    time.timeout = setTimeout(time.counter, 1000);
+                },
+
+                updateTotal : function () {
+                    let work = 0;
+                    let waste = 0;
+                    document.getElementById('entries').querySelectorAll('tr').forEach(function(tr) {
+                        let td = tr.querySelectorAll('td');
+
+                        let matches = td[1].textContent.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+
+                        let seconds = parseInt(matches[3]) + ( parseInt(matches[2]) * 60 ) + ( parseInt(matches[1]) * 60 * 60 );
+
+                        if (null === tr.querySelector('input:checked')) {
+                            waste += seconds;
+                        } else {
+                            work += seconds;
+                        }
+                    });
+
+                    let tr = document.getElementById('total').querySelectorAll('tr');
+                    tr[0].querySelectorAll('td')[1].textContent = time.millisecondToTime( work * 1000 );
+                    tr[1].querySelectorAll('td')[1].textContent = time.millisecondToTime( waste * 1000 );
+                },
+
+                millisecondToTime : function (s) {
+                    let ms = s % 1000;
+                    s = (s - ms) / 1000;
+                    let secs = s % 60;
+                    s = (s - secs) / 60;
+                    let mins = s % 60;
+                    let hrs = (s - mins) / 60;
+
+                    return hrs.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+                },
+
+                next : function ( event ) {
+                    event.preventDefault();
+
+                    if (!time.input.value) {
+                        return;
+                    }
+
+                    document.getElementById('buttonStop').removeAttribute('disabled');
+
+                    if (time.timeout) {
+                        clearTimeout(time.timeout);
+                    }
+
+                    let clone = time.template.content.cloneNode(true);
+                    let td = clone.querySelectorAll("td");
+                    time.tbody.prepend(clone);
+                    
+                    td[0].textContent = time.input.value;
+                    //td[0].prepend(time.continueIcon());
+                    td[1].textContent = '00:00:00';
+
+                    if (!time.start) {
+                        time.start = new Date();
+                    }
+
+                    if (!time.previous) {
+                        let placeholder = document.getElementById('placeholder');
+                        if ( placeholder ) {
+                            time.tbody.removeChild( placeholder );
+                        }
+
+                        td[2].textContent = time.start.toLocaleString('en-US');
+                        time.previous = td;
+                        time.input.value = '';
+                        time.input.focus();
+                        time.timeout = setTimeout(time.counter, 1000);
+                        return;
+                    }
+
+                    let now = new Date();
+
+                    td[2].textContent = now.toLocaleString('en-US');
+
+                    let dateDiff = now - time.start;
+                    time.previous[1].textContent = time.millisecondToTime(dateDiff);
+                    time.previous[2].textContent = time.start.toLocaleString('en-US');
+                    time.previous[3].textContent = now.toLocaleString('en-US');
+
+                    time.start = now;
+
+                    time.previous = td;
+
+                    time.timeout = setTimeout(time.counter, 1000);
+
+                    time.input.value = '';
+                    time.input.focus();
+                },
+
+                doubleClick : function (event) {
+
+                    let el = event.target;
+                    if ( 'continue' === el.className ) {
+                        event.preventDefault();
+                        let name = el.textContent;
+                        time.input.value = name + " (cont.)";
+                        time.form.dispatchEvent(new Event('submit'));
+
+                        
+                        if (null === el.parentNode.querySelector('input:checked')) {
+                            time.previous[0].parentNode.querySelector('input').checked = false;
+                        }
+                    }
+                },
+
+                stop : function ( event ) {
+                    if (!time.previous || !time.start) {
+                        return;
+                    }
+                    clearTimeout(time.timeout);
+                    time.timeout = null;
+                    
+                    let now = new Date();
+                    let dateDiff = now - time.start;
+                    time.previous[1].textContent = time.millisecondToTime(dateDiff);
+                    time.previous[2].textContent = time.start.toLocaleString('en-US');
+                    time.previous[3].textContent = now.toLocaleString('en-US');
+
+                    time.previous = null;
+                    time.start = null;
+
+                    time.updateTotal();
+
+                    document.getElementById('buttonStop').setAttribute('disabled', 'disabled');
+                },
+
+                init : function () {
+                    time.form.addEventListener( 'submit', time.next );
+                    time.input.focus();
+
+                    document.getElementById('buttonStop').addEventListener( 'click', time.stop );
+
+                    // capture clicks
+                    time.tbody.addEventListener( 'dblclick', time.doubleClick );
+                }
+            };
+
+            // time.init();
+
+            /*
+            timer = {
+                form : {
+                    el : null,
+                    setup : function ( el ) {
+                        el.setFocus = timer.form.setFocus;
+                        el.labelInput = el.querySelector( 'input[name="label"]' );
+
+                        timer.form.el = el;
+                    },
+                    methods : {
+                        setFocus : function () {
+                            timer.form.el.labelInput.focus();
+                        },
+                        getLabelValue : function () {
+                            return timer.form.el.labelInput.value;
+                        }
+                    }
+                },
+                init : function () {
+                    timer.form.setup( document.querySelector( 'form' ) );
+
+                    timer.form.setFocus();
+                }
+            };
+            */
+
+            (function () {
+                /*
+                let timer = {
+                    template : document.getElementById('row'),
+
+                    form : {
+                        input : document.querySelector('input[name="label"]'),
+                        form : document.querySelector('form'),
+
+                        initSubmitEvent : function () {
+                            this.form.addEventListener( 'submit', timer.interaction.saveForm );
+                        },
+                        setFocus : function () {
+                            this.input.focus();
+                        },
+                        getLabel : function () {
+                            return this.input.value;
+                        },
+                        clearLabel : function () {
+                            this.input.value = '';
+                        }
+                    },
+                    interaction : {
+                        saveForm : function ( event ) {
+                            // prevent submit and page refresh
+                            event.preventDefault();
+
+                            let label = timer.form.getLabel();
+
+                            if (!label) {
+                                return;
+                            }
+                            
+                            console.log(label);
+
+                            timer.form.clearLabel();
+                            timer.form.setFocus();
+                        }
+                    }
+                };
+
+                // move the cursor into the form
+                timer.form.setFocus();
+
+                timer.form.initSubmitEvent();
+
+                */
+
+                task = {
+                    element : {
+                        form : null,
+                        table : null,
+                        template : null
+                    },
+                    init : function ( form, table, template ) {
+                        task.extend.form( form );
+                        form.addEventListener( 'submit', task.interaction.formSubmit );
+
+                        task.extend.template( template );
+
+                        task.extend.table( table );
+                        table.addEventListener( 'blur', task.interaction.tableEdited );
+
+                        task.element.form = form;
+                        task.element.table = table;
+                        task.element.template = template;
+
+                        table.restore();
+
+                        form.setFocus();
+                    },
+                    extend : {
+                        form : function ( form ) {
+                            form.labelInput = form.querySelector('input[name="label"]');
+                            form.setFocus = function () {
+                                this.labelInput.focus();
+                            };
+                            form.getTaskName = function () {
+                                return this.labelInput.value;
+                            };
+                            form.clearTaskName = function () {
+                                this.labelInput.value = '';
+                            };
+                            form.enableStopButton = function () {
+
+                            };
+                            form.disableStopButton = function () {
+
+                            };
+                            return form;
+                        },
+                        table : function ( table ) {
+                            table.getFirstRow = function () {
+                                return this.querySelector('#entries > tr');
+                            };
+                            table.getAllRows = function () {
+                                return this.querySelectorAll('#entries > tr');
+                            };
+                            table.makeNewRow = function () {
+                                let tr = task.element.template.getClone();
+                                this.tBodies[0].prepend( tr );
+                                tr = this.getFirstRow();
+                                return task.extend.tr( tr );
+                            };
+                            table.getTimes = function () {
+                                let waste = 0;
+                                let work = 0;
+                                let labels = {
+                                    work: [],
+                                    waste: []
+                                };
+                                this.getAllRows().forEach(
+                                    function (tr) {
+                                        //let td = tr.querySelectorAll('td');
+                                        let matches = tr.column.time.textContent.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+                                        if (!matches) {
+                                            // some kind of time format parse error
+                                            return;
+                                        }
+                                        let seconds = parseInt(matches[3]) + ( parseInt(matches[2]) * 60 ) + ( parseInt(matches[1]) * 60 * 60 );
+
+                                        let group;
+
+                                        if (tr.isWork()) {
+                                            work += seconds;
+                                            group = 'work';
+                                        } else {
+                                            waste += seconds;
+                                            group = 'waste';
+                                        }
+
+                                        let label = tr.column.name.textContent;
+                                        // group by label
+                                        if ( !labels[ group ][ label ] ) {
+                                            labels[ group ][ label ] = 0;
+                                        }
+                                        labels[ group ][ label ] += seconds;
+                                    }
+                                );
+
+                                for ( const groupKey in labels ) {
+                                    for ( const labelKey in labels[ groupKey ] ) {
+                                        labels[ groupKey ][ labelKey ] = task.secondsToDisplayTime ( labels[ groupKey ][ labelKey ] );
+                                    }
+                                }
+
+                                let workDayLength = 8 * 60 * 60;
+                                let endDate = new Date();
+                                endDate.setSeconds( endDate.getSeconds() + ( workDayLength - work ) );
+
+
+                                return {
+                                    work : task.secondsToDisplayTime( work ),
+                                    waste : task.secondsToDisplayTime( waste ),
+                                    endTime : ("0" + (endDate.getHours()-12)).slice(-2) + ":" + ("0" + endDate.getMinutes()).slice(-2) + ":" + ("0" + endDate.getSeconds()).slice(-2),
+                                    labels : labels
+                                };
+                            };
+                            table.save = function () {
+                                let tableDetails = [];
+                                let td;
+                                this.getAllRows().forEach(function (tr) {
+                                    
+                                    tableDetails.push(tr.getData());
+                                });
+                                localStorage.setItem( 'taskTableBackup', JSON.stringify( tableDetails ) );
+                            };
+                            table.restore = function () {
+                                let storedData = localStorage.getItem( 'taskTableBackup' );
+                                if ( !storedData ) {
+                                    return;
+                                }
+                                let rows = JSON.parse( storedData );
+
+                                if ( ! window.confirm( 'There are '+rows.length+' rows stored, do you want to restore them?' ) ) {
+                                    return;
+                                }
+
+                                let placeholder = document.getElementById( 'placeholder' );
+                                placeholder.parentNode.removeChild( placeholder );
+
+                                let tr, el;
+
+                                while ( el = rows.pop() ) {
+                                    tr = table.makeNewRow();
+                                    tr.setStartTime( new Date( el.start ) || null );
+                                    tr.setEndTime( new Date ( el.end ) || null );
+                                    tr.setName( el.name );
+                                    tr.setNote( el.note );
+                                    tr.setWork( el.work );
+                                    tr.updateTime();
+                                };
+
+                            };
+                            return table;
+                        },
+                        template : function ( template ) {
+                            template.getClone = function () {
+                                return this.content.cloneNode(true);
+                            };
+                            return template;
+                        },
+                        tr : function ( tr ) {
+                            tr.column = (function () {
+                                td = tr.querySelectorAll( 'td' );
+                                return {
+                                    name     : td[0],
+                                    time     : td[1],
+                                    start    : td[2],
+                                    end      : td[3],
+                                    work     : td[4],
+                                    note    : td[5]
+                                }
+                            })();
+                            tr.setName = function ( name ) {
+                                this.column.name.textContent = name;
+                            };
+                            tr.setTime = function ( time ) {
+                                time = time || 0;
+
+                                let ms = time % 1000;
+                                time = (time - ms) / 1000;
+                                let secs = time % 60;
+                                time = (time - secs) / 60;
+                                let mins = time % 60;
+                                let hrs = (time - mins) / 60;
+
+                                this.column.time.textContent = hrs.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
+                            };
+                            tr.setStartTime = function ( date) {
+                                date = date || new Date();
+                                this.column.start.textContent = date.toLocaleString('en-US');
+                            };
+                            tr.setEndTime = function ( date ) {
+                                date = date || new Date();
+                                this.column.end.textContent = date.toLocaleString('en-US');
+                            };
+                            tr.setNote = function ( note ) {
+                                this.column.note.textContent = note;
+                            };
+                            tr.setWork = function ( checked ) {
+                                let currentChecked = this.isWork();
+
+                                if ( !!checked == !!currentChecked ) {
+                                    // current value already matches, no change needed
+                                    return;
+                                }
+
+                                this.column.work.querySelector('input:checked').click();
+                            };
+                            tr.updateTime = function () {
+                                let startDate = new Date( this.column.start.textContent );
+                                let endDate   = new Date( this.column.end.textContent );
+                                this.setTime( endDate - startDate );
+                            };
+                            tr.isWork = function () {
+
+                                return !(null === this.column.work.querySelector('input:checked'))
+                            };
+                            tr.getData = function () {
+                                return {
+                                    name : this.column.name.textContent,
+                                    start : this.column.start.textContent,
+                                    end : this.column.end.textContent,
+                                    work : this.isWork(),
+                                    note : this.column.note.textContent
+                                };
+                            };
+                            return tr;
+                        }
+                    },
+                    interaction : {
+                        formSubmit : function ( event ) {
+                            // prevent submit and page refresh
+                            event.preventDefault();
+
+                            // get the task name
+                            let taskName = this.getTaskName();
+                            if (!taskName) {
+                                return;
+                            }
+
+                            let placeholder = document.getElementById( 'placeholder' );
+                            if ( placeholder ) {
+                                // remove placeholder on first task entry
+                                placeholder.parentNode.removeChild( placeholder );
+                            } else {
+                                // update previous row end time
+                                // @FIXME: do not update previous row if timer is stopped
+                                let firstRow = task.element.table.getFirstRow()
+                                firstRow.setEndTime();
+                                firstRow.updateTime();
+                            }
+
+                            // add new row
+                            let row = task.element.table.makeNewRow();
+                            row.setName( taskName );
+                            row.setStartTime();
+                            
+                            // clear task and refocus the input box
+                            this.clearTaskName();
+                            this.setFocus();
+
+                            task.element.table.save();
+                        },
+                        tableEdited : function () {
+                            this.getAllRows().forEach(function (el) {
+                                el.updateTime();
+                            });
+                            task.element.table.save();
+                        }
+                    },
+                    secondsToDisplayTime : function ( time ) {
+                        let seconds = Math.floor(time%60);
+                        let minutes =Math.floor((time/60))%60;
+                        let hours = Math.floor(time/60/60);
+
+                        return hours.toString().padStart(2, '0') + ':' + minutes.toString().padStart(2, '0') + ':' + seconds.toString().padStart(2, '0');
+                    }
+                };
+
+                task.init(
+                    document.querySelector('form'),
+                    document.querySelector('table'),
+                    document.getElementById('row')
+                );
+            })();
+        </script>
+    </body>
+</html>
