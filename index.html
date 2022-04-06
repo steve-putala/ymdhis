@@ -58,16 +58,28 @@
                 border: 1px solid #767676
                 border-radius: .2em;*/
             }
+            #settings label {
+                display: inline-block;
+                font-weight: bold;
+            }
+            #settings label input {
+                border: none;
+                text-align: right;
+                font-weight: normal;
+            }
         </style>
 
     </head>
     <body>
-        <form action="">
+        <form name="entry">
             <input name="label">
             <button type="submit">&#x23f5;</button>
-        </form>
+        </form> |
         <!--<button type="button" id="buttonPause">&#x23f8;</button>-->
-        <button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>
+        <!--<button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>-->
+        <form name="workday">
+            Work Day: <span id="work-elapsed">0</span> / <input name="work-length" type="text" value="8" size="1"> | End: <span class="work-end">00:00:00</span>
+        </form>
         <table contenteditable="true">
             <thead>
                 <tr>
@@ -82,6 +94,7 @@
             <tbody id="entries">
                 <tr id="placeholder"><td colspan="6">Enter an activity above</td></tr>
             </tbody>
+            <!--
             <tbody id="total">
                 <tr>
                     <td>work:</td>
@@ -94,6 +107,31 @@
                     <td colspan="4"></td>
                 </tr>
             </tbody>
+            -->
+        </table>
+        <table>
+            <thead>
+                <tr>
+                    <th colspan="3">Work Time Results</th>
+                </tr>
+                <tr>
+                    <th>Label</th>
+                    <th>Time</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody id="work-time"></tbody>
+            <thead>
+                <tr>
+                    <th colspan="3">Waste Time Results</th>
+                </tr>
+                <tr>
+                    <th>Label</th>
+                    <th>Time</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody id="waste-time"></tbody>
         </table>
 
         <template id="row">
@@ -109,142 +147,16 @@
             </tr>
         </template>
 
+        <template id="result-row">
+            <tr>
+                <td></td>
+                <td></td>
+                <td></td>
+            </tr>
+        </template>
+
         <script>
-            /*
-            let work = 0;
-            document.querySelectorAll('tbody tr').forEach(
-            function (tr) {
-            if (null === tr.querySelector('input:checked')) { return; }
-            let td = tr.querySelectorAll('td');
-            let matches = td[1].textContent.match(/^(\d{2}):(\d{2}):(\d{2})$/);
-            if (!matches) { return; }
-            let seconds = parseInt(matches[3]) + ( parseInt(matches[2]) * 60 ) + ( parseInt(matches[1]) * 60 * 60 );
-            work += seconds;
-            }
-            );
-            console.log(''+Math.floor(work/60/60)+':'+Math.floor((work/60))%60+':'+Math.floor(work%60));
-            */
-            // @TODO: save to local storage
-            // @TODO: catch event for radio button or time change to trigger total update
-
-            time = {
-                input : document.querySelector('input[name="label"]'),
-                form : document.querySelector('form'),
-                template : document.getElementById('row'),
-                totalTemplate : document.getElementById('totals'),
-                tbody : document.getElementById('entries'),
-                continueIcon : function () {
-                    let button = document.createElement('button');
-                    button.className = 'continueIcon';
-                    button.textContent = "\u27f3";
-                    return button;
-                },
-                start : null,
-                previous : null,
-                timeout : null,
-
-                counter : function () {
-                    if (!time.timeout || !time.previous) {
-                        return;
-                    }
-
-                    time.previous[1].textContent = time.millisecondToTime(new Date() - time.start);
-
-                    time.updateTotal();
-
-                    time.timeout = setTimeout(time.counter, 1000);
-                },
-
-                updateTotal : function () {
-                    let work = 0;
-                    let waste = 0;
-                    document.getElementById('entries').querySelectorAll('tr').forEach(function(tr) {
-                        let td = tr.querySelectorAll('td');
-
-                        let matches = td[1].textContent.match(/^(\d{2}):(\d{2}):(\d{2})$/);
-
-                        let seconds = parseInt(matches[3]) + ( parseInt(matches[2]) * 60 ) + ( parseInt(matches[1]) * 60 * 60 );
-
-                        if (null === tr.querySelector('input:checked')) {
-                            waste += seconds;
-                        } else {
-                            work += seconds;
-                        }
-                    });
-
-                    let tr = document.getElementById('total').querySelectorAll('tr');
-                    tr[0].querySelectorAll('td')[1].textContent = time.millisecondToTime( work * 1000 );
-                    tr[1].querySelectorAll('td')[1].textContent = time.millisecondToTime( waste * 1000 );
-                },
-
-                millisecondToTime : function (s) {
-                    let ms = s % 1000;
-                    s = (s - ms) / 1000;
-                    let secs = s % 60;
-                    s = (s - secs) / 60;
-                    let mins = s % 60;
-                    let hrs = (s - mins) / 60;
-
-                    return hrs.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
-                },
-
-                next : function ( event ) {
-                    event.preventDefault();
-
-                    if (!time.input.value) {
-                        return;
-                    }
-
-                    document.getElementById('buttonStop').removeAttribute('disabled');
-
-                    if (time.timeout) {
-                        clearTimeout(time.timeout);
-                    }
-
-                    let clone = time.template.content.cloneNode(true);
-                    let td = clone.querySelectorAll("td");
-                    time.tbody.prepend(clone);
-                    
-                    td[0].textContent = time.input.value;
-                    //td[0].prepend(time.continueIcon());
-                    td[1].textContent = '00:00:00';
-
-                    if (!time.start) {
-                        time.start = new Date();
-                    }
-
-                    if (!time.previous) {
-                        let placeholder = document.getElementById('placeholder');
-                        if ( placeholder ) {
-                            time.tbody.removeChild( placeholder );
-                        }
-
-                        td[2].textContent = time.start.toLocaleString('en-US');
-                        time.previous = td;
-                        time.input.value = '';
-                        time.input.focus();
-                        time.timeout = setTimeout(time.counter, 1000);
-                        return;
-                    }
-
-                    let now = new Date();
-
-                    td[2].textContent = now.toLocaleString('en-US');
-
-                    let dateDiff = now - time.start;
-                    time.previous[1].textContent = time.millisecondToTime(dateDiff);
-                    time.previous[2].textContent = time.start.toLocaleString('en-US');
-                    time.previous[3].textContent = now.toLocaleString('en-US');
-
-                    time.start = now;
-
-                    time.previous = td;
-
-                    time.timeout = setTimeout(time.counter, 1000);
-
-                    time.input.value = '';
-                    time.input.focus();
-                },
+/*
 
                 doubleClick : function (event) {
 
@@ -261,123 +173,18 @@
                         }
                     }
                 },
-
-                stop : function ( event ) {
-                    if (!time.previous || !time.start) {
-                        return;
-                    }
-                    clearTimeout(time.timeout);
-                    time.timeout = null;
-                    
-                    let now = new Date();
-                    let dateDiff = now - time.start;
-                    time.previous[1].textContent = time.millisecondToTime(dateDiff);
-                    time.previous[2].textContent = time.start.toLocaleString('en-US');
-                    time.previous[3].textContent = now.toLocaleString('en-US');
-
-                    time.previous = null;
-                    time.start = null;
-
-                    time.updateTotal();
-
-                    document.getElementById('buttonStop').setAttribute('disabled', 'disabled');
-                },
-
-                init : function () {
-                    time.form.addEventListener( 'submit', time.next );
-                    time.input.focus();
-
-                    document.getElementById('buttonStop').addEventListener( 'click', time.stop );
-
-                    // capture clicks
-                    time.tbody.addEventListener( 'dblclick', time.doubleClick );
-                }
-            };
-
-            // time.init();
-
-            /*
-            timer = {
-                form : {
-                    el : null,
-                    setup : function ( el ) {
-                        el.setFocus = timer.form.setFocus;
-                        el.labelInput = el.querySelector( 'input[name="label"]' );
-
-                        timer.form.el = el;
-                    },
-                    methods : {
-                        setFocus : function () {
-                            timer.form.el.labelInput.focus();
-                        },
-                        getLabelValue : function () {
-                            return timer.form.el.labelInput.value;
-                        }
-                    }
-                },
-                init : function () {
-                    timer.form.setup( document.querySelector( 'form' ) );
-
-                    timer.form.setFocus();
-                }
-            };
-            */
+*/
 
             (function () {
-                /*
-                let timer = {
-                    template : document.getElementById('row'),
-
-                    form : {
-                        input : document.querySelector('input[name="label"]'),
-                        form : document.querySelector('form'),
-
-                        initSubmitEvent : function () {
-                            this.form.addEventListener( 'submit', timer.interaction.saveForm );
-                        },
-                        setFocus : function () {
-                            this.input.focus();
-                        },
-                        getLabel : function () {
-                            return this.input.value;
-                        },
-                        clearLabel : function () {
-                            this.input.value = '';
-                        }
-                    },
-                    interaction : {
-                        saveForm : function ( event ) {
-                            // prevent submit and page refresh
-                            event.preventDefault();
-
-                            let label = timer.form.getLabel();
-
-                            if (!label) {
-                                return;
-                            }
-                            
-                            console.log(label);
-
-                            timer.form.clearLabel();
-                            timer.form.setFocus();
-                        }
-                    }
-                };
-
-                // move the cursor into the form
-                timer.form.setFocus();
-
-                timer.form.initSubmitEvent();
-
-                */
-
                 task = {
                     element : {
                         form : null,
                         table : null,
-                        template : null
+                        template : null,
+                        result : null
                     },
-                    init : function ( form, table, template ) {
+                    timer : null,
+                    init : function ( form, table, template, result ) {
                         task.extend.form( form );
                         form.addEventListener( 'submit', task.interaction.formSubmit );
 
@@ -386,9 +193,13 @@
                         task.extend.table( table );
                         table.addEventListener( 'blur', task.interaction.tableEdited );
 
+                        task.extend.result( result );
+
+
                         task.element.form = form;
                         task.element.table = table;
                         task.element.template = template;
+                        task.element.result = result;
 
                         table.restore();
 
@@ -427,6 +238,12 @@
                                 tr = this.getFirstRow();
                                 return task.extend.tr( tr );
                             };
+                            table.updateRows = function () {
+                                this.getFirstRow().setEndTime(new Date());
+                                this.getAllRows().forEach(function (el) {
+                                    el.updateTime();
+                                });
+                            },
                             table.getTimes = function () {
                                 let waste = 0;
                                 let work = 0;
@@ -457,19 +274,26 @@
                                         let label = tr.column.name.textContent;
                                         // group by label
                                         if ( !labels[ group ][ label ] ) {
-                                            labels[ group ][ label ] = 0;
+                                            labels[ group ][ label ] = {
+                                                time : 0,
+                                                notes : ''
+                                            };
                                         }
-                                        labels[ group ][ label ] += seconds;
+                                        labels[ group ][ label ]['time'] += seconds;
+                                        
+                                        if (tr.column.note.textContent.length) {
+                                            labels[ group ][ label ]['notes'] += tr.column.note.textContent + '<br>';
+                                        }
                                     }
                                 );
 
                                 for ( const groupKey in labels ) {
                                     for ( const labelKey in labels[ groupKey ] ) {
-                                        labels[ groupKey ][ labelKey ] = task.secondsToDisplayTime ( labels[ groupKey ][ labelKey ] );
+                                        labels[ groupKey ][ labelKey ]['time'] = task.secondsToDisplayTime ( labels[ groupKey ][ labelKey ]['time'] );
                                     }
                                 }
 
-                                let workDayLength = 8 * 60 * 60;
+                                let workDayLength = task.element.result.getLength() * 60 * 60;
                                 let endDate = new Date();
                                 endDate.setSeconds( endDate.getSeconds() + ( workDayLength - work ) );
 
@@ -515,6 +339,8 @@
                                     tr.setWork( el.work );
                                     tr.updateTime();
                                 };
+
+                                task.interaction.startTimer();
 
                             };
                             return table;
@@ -592,6 +418,29 @@
                                 };
                             };
                             return tr;
+                        },
+                        result : function ( result ) {
+                            result.element = (function () {
+                                return {
+                                    elapsed : document.getElementById('work-elapsed'),
+                                    length : result.querySelector('input[name="work-length"]'),
+                                    end : result.querySelector('.work-end')
+                                }
+                            })();
+
+                            result.getLength = function () {
+                                return this.element.length.value;
+                            };
+
+                            result.setElapsed = function ( time ) {
+                                this.element.elapsed.textContent = time;
+                            };
+
+                            result.setEnd = function ( time ) {
+                                this.element.end.textContent = time;
+                            };
+
+                            return result;
                         }
                     },
                     interaction : {
@@ -608,7 +457,9 @@
                             let placeholder = document.getElementById( 'placeholder' );
                             if ( placeholder ) {
                                 // remove placeholder on first task entry
+                                // @FIXME: handling placeholder inline is messy, perhaps create placeholder element and extend
                                 placeholder.parentNode.removeChild( placeholder );
+                                task.interaction.startTimer();
                             } else {
                                 // update previous row end time
                                 // @FIXME: do not update previous row if timer is stopped
@@ -627,12 +478,41 @@
                             this.setFocus();
 
                             task.element.table.save();
+                            task.interaction.runUpdateLoop();
                         },
                         tableEdited : function () {
-                            this.getAllRows().forEach(function (el) {
-                                el.updateTime();
-                            });
+                            task.element.table.updateRows();
                             task.element.table.save();
+                            task.interaction.updateResult();
+                        },
+                        updateResult : function () {
+                            task.element.table.updateRows();
+                            let times = task.element.table.getTimes();
+                            task.element.result.setElapsed( times.work );
+                            task.element.result.setEnd( times.endTime );
+                        },
+                        updateFirstRow : function () {
+                            task.element.table.getFirstRow().setEndTime(new Date());
+                            task.element.table.getFirstRow().updateTime();
+                        },
+                        runUpdateLoop : function () {
+                            task.interaction.updateFirstRow();
+                            task.interaction.updateResult();
+                        },
+                        startTimer : function () {
+                            if ( task.timer ) {
+                                task.interaction.endTimer();
+                            }
+
+                            task.interaction.runUpdateLoop();
+
+                            //setTimeout( function () {
+                                task.timer = setInterval( task.interaction.runUpdateLoop, 1000 );
+                            //}, (60 - (new Date).getSeconds()) * 1000);
+
+                        },
+                        endTimer : function () {
+                            clearInterval( task.timer );
                         }
                     },
                     secondsToDisplayTime : function ( time ) {
@@ -645,9 +525,10 @@
                 };
 
                 task.init(
-                    document.querySelector('form'),
+                    document.querySelector('form[name="entry"]'),
                     document.querySelector('table'),
-                    document.getElementById('row')
+                    document.getElementById('row'),
+                    document.querySelector('form[name="workday"]')
                 );
             })();
         </script>
