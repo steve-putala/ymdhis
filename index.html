@@ -76,7 +76,7 @@
             <button type="submit">&#x23f5;</button>
         </form> |
         <!--<button type="button" id="buttonPause">&#x23f8;</button>-->
-        <!--<button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>-->
+        <button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>
         <form name="workday">
             Work Day: <span id="work-elapsed">0</span> / <input name="work-length" type="text" value="8" size="1"> | End: <span class="work-end">00:00:00</span>
         </form>
@@ -187,6 +187,9 @@
                     init : function ( form, table, template, result ) {
                         task.extend.form( form );
                         form.addEventListener( 'submit', task.interaction.formSubmit );
+                        
+                        // @FIXME: buttonStop does not have addEventListener
+                        //document.getElementById( 'buttonStop' ).addEventListenter( 'click', task.interaction.stopButton );
 
                         task.extend.template( template );
 
@@ -194,6 +197,7 @@
                         table.addEventListener( 'blur', task.interaction.tableEdited );
 
                         task.extend.result( result );
+
 
 
                         task.element.form = form;
@@ -239,6 +243,10 @@
                                 return task.extend.tr( tr );
                             };
                             table.updateRows = function () {
+                                // @FIXME: do better than this for checking first entry
+                                if ( !this.getFirstRow() ) {
+                                    return;
+                                }
                                 this.getFirstRow().setEndTime(new Date());
                                 this.getAllRows().forEach(function (el) {
                                     el.updateTime();
@@ -282,7 +290,7 @@
                                         labels[ group ][ label ]['time'] += seconds;
                                         
                                         if (tr.column.note.textContent.length) {
-                                            labels[ group ][ label ]['notes'] += tr.column.note.textContent + '<br>';
+                                            labels[ group ][ label ]['notes'] = tr.column.note.innerHTML + '<br>' + labels[ group ][ label ]['notes'];
                                         }
                                     }
                                 );
@@ -387,7 +395,7 @@
                                 this.column.end.textContent = date.toLocaleString('en-US');
                             };
                             tr.setNote = function ( note ) {
-                                this.column.note.textContent = note;
+                                this.column.note.innerHTML = note;
                             };
                             tr.setWork = function ( checked ) {
                                 let currentChecked = this.isWork();
@@ -414,7 +422,7 @@
                                     start : this.column.start.textContent,
                                     end : this.column.end.textContent,
                                     work : this.isWork(),
-                                    note : this.column.note.textContent
+                                    note : this.column.note.innerHTML
                                 };
                             };
                             return tr;
@@ -424,10 +432,55 @@
                                 return {
                                     elapsed : document.getElementById('work-elapsed'),
                                     length : result.querySelector('input[name="work-length"]'),
-                                    end : result.querySelector('.work-end')
+                                    end : result.querySelector('.work-end'),
+                                    workTable : document.getElementById('work-time'),
+                                    wasteTable : document.getElementById('waste-time'),
+                                    rowTemplate : document.getElementById('result-row')
                                 }
                             })();
 
+                            // table functions
+
+                            result.element.rowTemplate.getClone = function () {
+                                return this.content.cloneNode(true);
+                            };
+
+                            result.addWorkRows = function ( labels ) {
+                                let rows, tds, child;
+
+                                while ( child = this.element.workTable.firstChild ) {
+                                    this.element.workTable.removeChild( child );
+                                }
+
+                                for (var label in labels) {
+                                    row = this.element.rowTemplate.getClone();
+                                    tds = row.querySelectorAll('td');
+                                    tds[0].innerHTML = label;
+                                    tds[1].innerHTML = labels[ label ]['time'];
+                                    tds[2].innerHTML = labels[ label ]['notes'];
+                                    this.element.workTable.prepend( row );
+                                }
+                            }
+
+                            result.addWasteRows = function ( labels ) {
+                                let rows, tds, child;
+
+                                while ( child = this.element.wasteTable.firstChild ) {
+                                    this.element.wasteTable.removeChild( child );
+                                }
+
+                                for (var label in labels) {
+                                    console.log(labels);
+                                    row = this.element.rowTemplate.getClone();
+                                    tds = row.querySelectorAll('td');
+                                    tds[0].innerHTML = label;
+                                    tds[1].innerHTML = labels[ label ]['time'];
+                                    tds[2].innerHTML = labels[ label ]['notes'];
+                                    this.element.wasteTable.prepend( row );
+                                }
+                            }
+
+                            // header functions
                             result.getLength = function () {
                                 return this.element.length.value;
                             };
@@ -478,7 +531,17 @@
                             this.setFocus();
 
                             task.element.table.save();
-                            task.interaction.runUpdateLoop();
+
+                            // @FIXME: improve handling of first run, don't keep using placeholder
+                            if ( !placeholder ) {
+                                task.interaction.runUpdateLoop();
+                            }
+                        },
+                        stopButton : function ( event ) {
+                            task.interaction.endTimer();
+                            task.element.table.getFirstRow().setEndTime();
+                            task.interaction.updateResult();
+                            task.interaction.fillResultTable();
                         },
                         tableEdited : function () {
                             task.element.table.updateRows();
@@ -491,9 +554,18 @@
                             task.element.result.setElapsed( times.work );
                             task.element.result.setEnd( times.endTime );
                         },
+                        fillResultTable : function () {
+                            task.element.table.updateRows();
+                            let times = task.element.table.getTimes();
+                            task.element.result.addWorkRows( times.labels.work );
+                            task.element.result.addWasteRows( times.labels.waste );
+                        },
                         updateFirstRow : function () {
-                            task.element.table.getFirstRow().setEndTime(new Date());
-                            task.element.table.getFirstRow().updateTime();
+                            let firstRow = task.element.table.getFirstRow();
+                            if ( firstRow ) {
+                                firstRow.setEndTime(new Date());
+                                firstRow.updateTime();
+                            }
                         },
                         runUpdateLoop : function () {
                             task.interaction.updateFirstRow();
