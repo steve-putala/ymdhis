@@ -189,7 +189,7 @@
                         form.addEventListener( 'submit', task.interaction.formSubmit );
                         
                         // @FIXME: buttonStop does not have addEventListener
-                        //document.getElementById( 'buttonStop' ).addEventListenter( 'click', task.interaction.stopButton );
+                        document.getElementById( 'buttonStop' ).addEventListener( 'click', task.interaction.stopButton );
 
                         task.extend.template( template );
 
