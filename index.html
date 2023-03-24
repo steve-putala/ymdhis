@@ -5,6 +5,9 @@
                 margin: 0;
                 display: inline-block;
             }
+            form[name="settings"] {
+                display: block;
+            }
             table {
                 border-collapse: collapse;
             }
@@ -79,6 +82,12 @@
         <button type="button" id="buttonStop" disabled="disabled">&#x23f9;</button>
         <form name="workday">
             Work Day: <span id="work-elapsed">0</span> / <input name="work-length" type="text" value="8" size="1"> | End: <span class="work-end">00:00:00</span>
+        </form>
+        <form name="settings">
+            <label>
+                Task Time Limit:
+                <input name="time-limit" type="text" value="" size="1">
+            </label>
         </form>
         <table contenteditable="true">
             <thead>
@@ -184,12 +193,14 @@
                         result : null
                     },
                     timer : null,
-                    init : function ( form, table, template, result ) {
+                    init : function ( form, settings, table, template, result ) {
                         task.extend.form( form );
                         form.addEventListener( 'submit', task.interaction.formSubmit );
                         
                         // @FIXME: buttonStop does not have addEventListener
                         document.getElementById( 'buttonStop' ).addEventListener( 'click', task.interaction.stopButton );
+
+                        task.extend.settings( settings );
 
                         task.extend.template( template );
 
@@ -201,6 +212,7 @@
 
 
                         task.element.form = form;
+                        task.element.settings = settings;
                         task.element.table = table;
                         task.element.template = template;
                         task.element.result = result;
@@ -228,6 +240,13 @@
 
                             };
                             return form;
+                        },
+                        settings : function ( settings ) {
+                            settings.timeLimitInput = settings.querySelector('input[name="time-limit"]');
+                            settings.getTimeLimit = function () {
+                                return this.timeLimitInput.value;
+                            };
+                            return settings;
                         },
                         table : function ( table ) {
                             table.getFirstRow = function () {
@@ -336,10 +355,10 @@
                                 let placeholder = document.getElementById( 'placeholder' );
                                 placeholder.parentNode.removeChild( placeholder );
 
-                                let tr, el;
+                                rows = rows.reverse();
 
-                                while ( el = rows.pop() ) {
-                                    tr = table.makeNewRow();
+                                for ( const el of rows ) {
+                                    const tr = table.makeNewRow();
                                     tr.setStartTime( new Date( el.start ) || null );
                                     tr.setEndTime( new Date ( el.end ) || null );
                                     tr.setName( el.name );
@@ -349,6 +368,7 @@
                                 };
 
                                 task.interaction.startTimer();
+                                document.getElementById('buttonStop').disabled = false;
 
                             };
                             return table;
@@ -383,6 +403,10 @@
                                 time = (time - secs) / 60;
                                 let mins = time % 60;
                                 let hrs = (time - mins) / 60;
+
+                                if ( secs == 0 && ( timeLimit = task.element.settings.getTimeLimit() ) && ( mins >= timeLimit || hrs > 0 ) && mins % 5 == 0 ) {
+                                    alert('Spending too much time on this task');
+                                }
 
                                 this.column.time.textContent = hrs.toString().padStart(2, '0') + ':' + mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
                             };
@@ -452,7 +476,7 @@
                                     this.element.workTable.removeChild( child );
                                 }
 
-                                for (var label in labels) {
+                                for ( const label in labels) {
                                     row = this.element.rowTemplate.getClone();
                                     tds = row.querySelectorAll('td');
                                     tds[0].innerHTML = label;
@@ -469,7 +493,7 @@
                                     this.element.wasteTable.removeChild( child );
                                 }
 
-                                for (var label in labels) {
+                                for ( const label in labels) {
                                     console.log(labels);
                                     row = this.element.rowTemplate.getClone();
                                     tds = row.querySelectorAll('td');
@@ -513,6 +537,7 @@
                                 // @FIXME: handling placeholder inline is messy, perhaps create placeholder element and extend
                                 placeholder.parentNode.removeChild( placeholder );
                                 task.interaction.startTimer();
+                                document.getElementById('buttonStop').disabled = false;
                             } else {
                                 // update previous row end time
                                 // @FIXME: do not update previous row if timer is stopped
@@ -598,6 +623,7 @@
 
                 task.init(
                     document.querySelector('form[name="entry"]'),
+                    document.querySelector('form[name="settings"]'),
                     document.querySelector('table'),
                     document.getElementById('row'),
                     document.querySelector('form[name="workday"]')
